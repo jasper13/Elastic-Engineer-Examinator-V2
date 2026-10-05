@@ -1,0 +1,891 @@
+[
+  {
+    "titel": "Define an index from requirements",
+    "domein": "Data Management",
+    "opdracht": "Create an index `ece-index-req` that satisfies these requirements: 3 primary shards, 1 replica, and a refresh interval of 30 seconds.",
+    "hint": "Put everything in the settings block: number_of_shards, number_of_replicas and refresh_interval.",
+    "modelantwoord": "PUT /ece-index-req\n{\n  \"settings\": {\n    \"number_of_shards\": 3,\n    \"number_of_replicas\": 1,\n    \"refresh_interval\": \"30s\"\n  }\n}",
+    "checks": [
+      {
+        "naam": "Index exists",
+        "methode": "HEAD",
+        "pad": "/ece-index-req",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "3 primary shards",
+        "methode": "GET",
+        "pad": "/ece-index-req/_settings",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-index-req.settings.index.number_of_shards",
+          "operator": "eq",
+          "waarde": "3"
+        }
+      },
+      {
+        "naam": "Refresh interval 30s",
+        "methode": "GET",
+        "pad": "/ece-index-req/_settings",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-index-req.settings.index.refresh_interval",
+          "operator": "eq",
+          "waarde": "30s"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Dynamic template",
+    "domein": "Data Management",
+    "opdracht": "Create an index `ece-dyn` with a dynamic template that maps every string field to `keyword` instead of the default text/keyword multi-field.",
+    "hint": "Use mappings.dynamic_templates with match_mapping_type \"string\" and a mapping of type keyword.",
+    "modelantwoord": "PUT /ece-dyn\n{\n  \"mappings\": {\n    \"dynamic_templates\": [\n      { \"strings_as_keywords\": {\n          \"match_mapping_type\": \"string\",\n          \"mapping\": { \"type\": \"keyword\" }\n      } }\n    ]\n  }\n}",
+    "checks": [
+      {
+        "naam": "Index exists",
+        "methode": "HEAD",
+        "pad": "/ece-dyn",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Dynamic template present",
+        "methode": "GET",
+        "pad": "/ece-dyn/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-dyn.mappings.dynamic_templates.0",
+          "operator": "exists"
+        }
+      },
+      {
+        "naam": "Maps strings to keyword",
+        "methode": "GET",
+        "pad": "/ece-dyn/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-dyn.mappings.dynamic_templates.0.strings_as_keywords.mapping.type",
+          "operator": "eq",
+          "waarde": "keyword"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "ILM policy for a time-series index",
+    "domein": "Data Management",
+    "opdracht": "Create an ILM policy `ece-ts-policy` for a time-series index: a hot phase that rolls over at 50 GB or 30 days, a warm phase after 7 days, and a delete phase after 90 days.",
+    "hint": "phases.hot.actions.rollover (max_primary_shard_size/max_age), phases.warm.min_age, phases.delete.min_age with a delete action.",
+    "modelantwoord": "PUT _ilm/policy/ece-ts-policy\n{\n  \"policy\": { \"phases\": {\n    \"hot\":  { \"actions\": { \"rollover\": { \"max_primary_shard_size\": \"50gb\", \"max_age\": \"30d\" } } },\n    \"warm\": { \"min_age\": \"7d\", \"actions\": {} },\n    \"delete\": { \"min_age\": \"90d\", \"actions\": { \"delete\": {} } }\n  } }\n}",
+    "checks": [
+      {
+        "naam": "Policy exists",
+        "methode": "GET",
+        "pad": "/_ilm/policy/ece-ts-policy",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Hot phase has rollover",
+        "methode": "GET",
+        "pad": "/_ilm/policy/ece-ts-policy",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-ts-policy.policy.phases.hot.actions.rollover",
+          "operator": "exists"
+        }
+      },
+      {
+        "naam": "Delete after 90 days",
+        "methode": "GET",
+        "pad": "/_ilm/policy/ece-ts-policy",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-ts-policy.policy.phases.delete.min_age",
+          "operator": "eq",
+          "waarde": "90d"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Index template that creates a data stream",
+    "domein": "Data Management",
+    "opdracht": "Create an index template `ece-ds-template` for pattern `ece-stream-*` that enables data streams, then create the data stream `ece-stream-logs`.",
+    "hint": "The template needs an empty \"data_stream\": {} block and a priority. Then PUT _data_stream/ece-stream-logs.",
+    "modelantwoord": "PUT _index_template/ece-ds-template\n{\n  \"index_patterns\": [\"ece-stream-*\"],\n  \"data_stream\": {},\n  \"priority\": 200\n}\n\nPUT _data_stream/ece-stream-logs",
+    "checks": [
+      {
+        "naam": "Template exists",
+        "methode": "GET",
+        "pad": "/_index_template/ece-ds-template",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Template enables data streams",
+        "methode": "GET",
+        "pad": "/_index_template/ece-ds-template",
+        "verwachting": {
+          "type": "json",
+          "pad": "index_templates.0.index_template.data_stream",
+          "operator": "exists"
+        }
+      },
+      {
+        "naam": "Data stream exists",
+        "methode": "GET",
+        "pad": "/_data_stream/ece-stream-logs",
+        "verwachting": {
+          "type": "json",
+          "pad": "data_streams.0.name",
+          "operator": "eq",
+          "waarde": "ece-stream-logs"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Search for terms and phrases",
+    "domein": "Searching Data",
+    "opdracht": "Test data will be staged in `ece-articles`. Run a match_phrase query on the `body` field for the exact phrase \"machine learning\" and confirm it returns exactly 2 documents.",
+    "hint": "Use GET /ece-articles/_search with a match_phrase query, or _count to verify the number of hits.",
+    "modelantwoord": "GET /ece-articles/_search\n{\n  \"query\": { \"match_phrase\": { \"body\": \"machine learning\" } }\n}",
+    "checks": [
+      {
+        "naam": "Phrase matches exactly 2 docs",
+        "methode": "GET",
+        "pad": "/ece-articles/_count",
+        "body": {
+          "query": {
+            "match_phrase": {
+              "body": "machine learning"
+            }
+          }
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "count",
+          "operator": "eq",
+          "waarde": 2
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage articles",
+        "methode": "PUT",
+        "pad": "/ece-articles/_bulk?refresh=true",
+        "body": "{\"index\":{\"_id\":\"1\"}}\n{\"body\":\"an introduction to machine learning\"}\n{\"index\":{\"_id\":\"2\"}}\n{\"body\":\"deep learning and machine vision\"}\n{\"index\":{\"_id\":\"3\"}}\n{\"body\":\"applied machine learning in practice\"}\n{\"index\":{\"_id\":\"4\"}}\n{\"body\":\"distributed systems design\"}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Boolean combination of queries and filters",
+    "domein": "Searching Data",
+    "opdracht": "Test data will be staged in `ece-products`. Write a bool query that returns products where `category` is \"electronics\" AND `price` is less than 500 (both as filters), then verify it returns exactly 2 documents.",
+    "hint": "Use a bool query with two filter clauses: a term on category and a range on price with lt 500.",
+    "modelantwoord": "GET /ece-products/_search\n{\n  \"query\": { \"bool\": { \"filter\": [\n    { \"term\": { \"category\": \"electronics\" } },\n    { \"range\": { \"price\": { \"lt\": 500 } } }\n  ] } }\n}",
+    "checks": [
+      {
+        "naam": "Bool filter returns 2 docs",
+        "methode": "GET",
+        "pad": "/ece-products/_count",
+        "body": {
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "term": {
+                    "category": "electronics"
+                  }
+                },
+                {
+                  "range": {
+                    "price": {
+                      "lt": 500
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "count",
+          "operator": "eq",
+          "waarde": 2
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage products",
+        "methode": "PUT",
+        "pad": "/ece-products/_bulk?refresh=true",
+        "body": "{\"index\":{\"_id\":\"1\"}}\n{\"category\":\"electronics\",\"price\":299,\"name\":\"webcam\"}\n{\"index\":{\"_id\":\"2\"}}\n{\"category\":\"electronics\",\"price\":450,\"name\":\"headset\"}\n{\"index\":{\"_id\":\"3\"}}\n{\"category\":\"electronics\",\"price\":899,\"name\":\"monitor\"}\n{\"index\":{\"_id\":\"4\"}}\n{\"category\":\"furniture\",\"price\":199,\"name\":\"chair\"}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Asynchronous search",
+    "domein": "Searching Data",
+    "opdracht": "Test data will be staged in `ece-events`. Submit an async search against `ece-events` running a match_all query, via the _async_search endpoint. The check verifies it works and returns results on this single node.",
+    "hint": "POST /ece-events/_async_search with a query. On a small index it completes immediately (is_running false).",
+    "modelantwoord": "POST /ece-events/_async_search?wait_for_completion_timeout=10s\n{\n  \"query\": { \"match_all\": {} }\n}",
+    "checks": [
+      {
+        "naam": "Async search returns hits",
+        "methode": "POST",
+        "pad": "/ece-events/_async_search?wait_for_completion_timeout=10s",
+        "body": {
+          "query": {
+            "match_all": {}
+          }
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "response.hits.total.value",
+          "operator": "gte",
+          "waarde": 3
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage events",
+        "methode": "PUT",
+        "pad": "/ece-events/_bulk?refresh=true",
+        "body": "{\"index\":{}}\n{\"type\":\"login\"}\n{\"index\":{}}\n{\"type\":\"logout\"}\n{\"index\":{}}\n{\"type\":\"purchase\"}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Metric and bucket aggregations",
+    "domein": "Searching Data",
+    "opdracht": "Test data will be staged in `ece-sales`. Write a search (size 0) with a terms bucket aggregation named `by_region` on `region`, and verify the response contains that aggregation.",
+    "hint": "Set size to 0 and add an aggs block with a terms aggregation on region.",
+    "modelantwoord": "GET /ece-sales/_search\n{\n  \"size\": 0,\n  \"aggs\": { \"by_region\": { \"terms\": { \"field\": \"region\" } } }\n}",
+    "checks": [
+      {
+        "naam": "Aggregation returns buckets",
+        "methode": "POST",
+        "pad": "/ece-sales/_search",
+        "body": {
+          "size": 0,
+          "aggs": {
+            "by_region": {
+              "terms": {
+                "field": "region"
+              }
+            }
+          }
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "aggregations.by_region.buckets.0.key",
+          "operator": "exists"
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage sales",
+        "methode": "PUT",
+        "pad": "/ece-sales/_bulk?refresh=true",
+        "body": "{\"index\":{}}\n{\"region\":\"emea\",\"amount\":120}\n{\"index\":{}}\n{\"region\":\"emea\",\"amount\":80}\n{\"index\":{}}\n{\"region\":\"apac\",\"amount\":200}\n{\"index\":{}}\n{\"region\":\"amer\",\"amount\":50}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Aggregations with sub-aggregations",
+    "domein": "Searching Data",
+    "opdracht": "Using `ece-sales` (staged for you), write a terms aggregation on `region` with a sub-aggregation `avg_amount` that averages `amount`. Verify the sub-aggregation appears in the response.",
+    "hint": "Nest an aggs block inside the terms aggregation, with an avg aggregation on amount.",
+    "modelantwoord": "GET /ece-sales/_search\n{\n  \"size\": 0,\n  \"aggs\": { \"by_region\": {\n    \"terms\": { \"field\": \"region\" },\n    \"aggs\": { \"avg_amount\": { \"avg\": { \"field\": \"amount\" } } }\n  } }\n}",
+    "checks": [
+      {
+        "naam": "Sub-aggregation present",
+        "methode": "POST",
+        "pad": "/ece-sales/_search",
+        "body": {
+          "size": 0,
+          "aggs": {
+            "by_region": {
+              "terms": {
+                "field": "region"
+              },
+              "aggs": {
+                "avg_amount": {
+                  "avg": {
+                    "field": "amount"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "aggregations.by_region.buckets.0.avg_amount.value",
+          "operator": "exists"
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage sales",
+        "methode": "PUT",
+        "pad": "/ece-sales/_bulk?refresh=true",
+        "body": "{\"index\":{}}\n{\"region\":\"emea\",\"amount\":120}\n{\"index\":{}}\n{\"region\":\"emea\",\"amount\":80}\n{\"index\":{}}\n{\"region\":\"apac\",\"amount\":200}\n{\"index\":{}}\n{\"region\":\"amer\",\"amount\":50}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Cross-cluster search",
+    "domein": "Searching Data",
+    "opdracht": "Cross-cluster search needs a remote cluster. Register a remote cluster `ece-remote` with seed `127.0.0.1:9300` (your own node, works single-node). The check verifies the remote is configured; a real CCS query then uses `ece-remote:index`.",
+    "hint": "PUT _cluster/settings with persistent cluster.remote.ece-remote.seeds. Then search via GET /ece-remote:some-index/_search.",
+    "modelantwoord": "PUT _cluster/settings\n{\n  \"persistent\": { \"cluster\": { \"remote\": {\n    \"ece-remote\": { \"seeds\": [\"127.0.0.1:9300\"] }\n  } } }\n}",
+    "checks": [
+      {
+        "naam": "Remote cluster configured",
+        "methode": "GET",
+        "pad": "/_cluster/settings",
+        "verwachting": {
+          "type": "json",
+          "pad": "persistent.cluster.remote.ece-remote.seeds.0",
+          "operator": "contains",
+          "waarde": "9300"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Search using a runtime field",
+    "domein": "Searching Data",
+    "opdracht": "Using `ece-products` (staged for you), run a search that defines a runtime field `price_with_tax` (price * 1.21) in the search request itself and returns it via the fields parameter. Verify the field comes back.",
+    "hint": "Add runtime_mappings to the search body and list price_with_tax under \"fields\". Use emit(doc['price'].value * 1.21).",
+    "modelantwoord": "GET /ece-products/_search\n{\n  \"runtime_mappings\": {\n    \"price_with_tax\": { \"type\": \"double\", \"script\": { \"source\": \"emit(doc['price'].value * 1.21)\" } }\n  },\n  \"fields\": [\"price_with_tax\"],\n  \"size\": 1\n}",
+    "checks": [
+      {
+        "naam": "Runtime field returned",
+        "methode": "POST",
+        "pad": "/ece-products/_search",
+        "body": {
+          "runtime_mappings": {
+            "price_with_tax": {
+              "type": "double",
+              "script": {
+                "source": "emit(doc['price'].value * 1.21)"
+              }
+            }
+          },
+          "fields": [
+            "price_with_tax"
+          ],
+          "size": 1
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "hits.hits.0.fields.price_with_tax.0",
+          "operator": "exists"
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage products",
+        "methode": "PUT",
+        "pad": "/ece-products/_bulk?refresh=true",
+        "body": "{\"index\":{\"_id\":\"1\"}}\n{\"category\":\"electronics\",\"price\":299,\"name\":\"webcam\"}\n{\"index\":{\"_id\":\"2\"}}\n{\"category\":\"electronics\",\"price\":450,\"name\":\"headset\"}\n{\"index\":{\"_id\":\"3\"}}\n{\"category\":\"electronics\",\"price\":899,\"name\":\"monitor\"}\n{\"index\":{\"_id\":\"4\"}}\n{\"category\":\"furniture\",\"price\":199,\"name\":\"chair\"}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Sort query results",
+    "domein": "Developing Search Applications",
+    "opdracht": "Using `ece-products` (staged for you), run a search sorted by `price` descending and verify the most expensive product (899) comes first.",
+    "hint": "Add a sort array: [{ \"price\": \"desc\" }].",
+    "modelantwoord": "GET /ece-products/_search\n{\n  \"sort\": [ { \"price\": \"desc\" } ]\n}",
+    "checks": [
+      {
+        "naam": "Highest price first",
+        "methode": "POST",
+        "pad": "/ece-products/_search",
+        "body": {
+          "sort": [
+            {
+              "price": "desc"
+            }
+          ],
+          "size": 1
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "hits.hits.0._source.price",
+          "operator": "eq",
+          "waarde": 899
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage products",
+        "methode": "PUT",
+        "pad": "/ece-products/_bulk?refresh=true",
+        "body": "{\"index\":{\"_id\":\"1\"}}\n{\"price\":299,\"name\":\"webcam\"}\n{\"index\":{\"_id\":\"2\"}}\n{\"price\":899,\"name\":\"monitor\"}\n{\"index\":{\"_id\":\"3\"}}\n{\"price\":450,\"name\":\"headset\"}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Paginate search results",
+    "domein": "Developing Search Applications",
+    "opdracht": "Using `ece-products` (staged, 3 docs), return the second page when page size is 1 (skip the first result), sorted by price ascending. Verify exactly the second-cheapest product (450) comes back.",
+    "hint": "Use from: 1 and size: 1 together with a sort on price ascending.",
+    "modelantwoord": "GET /ece-products/_search\n{\n  \"from\": 1,\n  \"size\": 1,\n  \"sort\": [ { \"price\": \"asc\" } ]\n}",
+    "checks": [
+      {
+        "naam": "Second page is the 450 product",
+        "methode": "POST",
+        "pad": "/ece-products/_search",
+        "body": {
+          "from": 1,
+          "size": 1,
+          "sort": [
+            {
+              "price": "asc"
+            }
+          ]
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "hits.hits.0._source.price",
+          "operator": "eq",
+          "waarde": 450
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage products",
+        "methode": "PUT",
+        "pad": "/ece-products/_bulk?refresh=true",
+        "body": "{\"index\":{\"_id\":\"1\"}}\n{\"price\":299,\"name\":\"webcam\"}\n{\"index\":{\"_id\":\"2\"}}\n{\"price\":899,\"name\":\"monitor\"}\n{\"index\":{\"_id\":\"3\"}}\n{\"price\":450,\"name\":\"headset\"}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Define and use index aliases",
+    "domein": "Developing Search Applications",
+    "opdracht": "Create an index `ece-orders-2024` and add a write-enabled alias `ece-orders` pointing to it (is_write_index: true). Verify the alias exists and is the write index.",
+    "hint": "Use POST _aliases with an add action that sets is_write_index to true.",
+    "modelantwoord": "PUT /ece-orders-2024\n\nPOST _aliases\n{\n  \"actions\": [\n    { \"add\": { \"index\": \"ece-orders-2024\", \"alias\": \"ece-orders\", \"is_write_index\": true } }\n  ]\n}",
+    "checks": [
+      {
+        "naam": "Alias exists",
+        "methode": "GET",
+        "pad": "/_alias/ece-orders",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Alias is write index",
+        "methode": "GET",
+        "pad": "/ece-orders-2024/_alias",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-orders-2024.aliases.ece-orders.is_write_index",
+          "operator": "eq",
+          "waarde": "True"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Define a mapping from requirements",
+    "domein": "Data Processing",
+    "opdracht": "Create an index `ece-people` with this mapping: `name` (text), `age` (integer), `joined` (date), `active` (boolean).",
+    "hint": "PUT /ece-people with mappings.properties and the four typed fields.",
+    "modelantwoord": "PUT /ece-people\n{\n  \"mappings\": { \"properties\": {\n    \"name\":   { \"type\": \"text\" },\n    \"age\":    { \"type\": \"integer\" },\n    \"joined\": { \"type\": \"date\" },\n    \"active\": { \"type\": \"boolean\" }\n  } }\n}",
+    "checks": [
+      {
+        "naam": "age is integer",
+        "methode": "GET",
+        "pad": "/ece-people/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-people.mappings.properties.age.type",
+          "operator": "eq",
+          "waarde": "integer"
+        }
+      },
+      {
+        "naam": "joined is date",
+        "methode": "GET",
+        "pad": "/ece-people/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-people.mappings.properties.joined.type",
+          "operator": "eq",
+          "waarde": "date"
+        }
+      },
+      {
+        "naam": "active is boolean",
+        "methode": "GET",
+        "pad": "/ece-people/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-people.mappings.properties.active.type",
+          "operator": "eq",
+          "waarde": "boolean"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Multi-fields with different types/analyzers",
+    "domein": "Data Processing",
+    "opdracht": "Create an index `ece-titles` where `title` is `text` with a sub-field `raw` (keyword) and a sub-field `english` (text using the english analyzer).",
+    "hint": "Use a fields block inside the title mapping with two sub-fields: raw (keyword) and english (text + analyzer).",
+    "modelantwoord": "PUT /ece-titles\n{\n  \"mappings\": { \"properties\": {\n    \"title\": { \"type\": \"text\", \"fields\": {\n      \"raw\":     { \"type\": \"keyword\" },\n      \"english\": { \"type\": \"text\", \"analyzer\": \"english\" }\n    } }\n  } }\n}",
+    "checks": [
+      {
+        "naam": "raw sub-field is keyword",
+        "methode": "GET",
+        "pad": "/ece-titles/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-titles.mappings.properties.title.fields.raw.type",
+          "operator": "eq",
+          "waarde": "keyword"
+        }
+      },
+      {
+        "naam": "english sub-field uses english analyzer",
+        "methode": "GET",
+        "pad": "/ece-titles/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-titles.mappings.properties.title.fields.english.analyzer",
+          "operator": "eq",
+          "waarde": "english"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Reindex and Update By Query",
+    "domein": "Data Processing",
+    "opdracht": "Test data is staged in `ece-src`. Reindex it into `ece-dst`, then run update_by_query on `ece-dst` to add `processed: true` to every document. Verify ece-dst has all docs and they are processed.",
+    "hint": "POST _reindex (source/dest), then POST /ece-dst/_update_by_query with script ctx._source.processed = true.",
+    "modelantwoord": "POST _reindex?refresh=true\n{\n  \"source\": { \"index\": \"ece-src\" },\n  \"dest\":   { \"index\": \"ece-dst\" }\n}\n\nPOST /ece-dst/_update_by_query?refresh=true\n{\n  \"script\": { \"source\": \"ctx._source.processed = true\" }\n}",
+    "checks": [
+      {
+        "naam": "ece-dst has 3 docs",
+        "methode": "GET",
+        "pad": "/ece-dst/_count",
+        "verwachting": {
+          "type": "json",
+          "pad": "count",
+          "operator": "eq",
+          "waarde": 3
+        }
+      },
+      {
+        "naam": "All docs processed",
+        "methode": "GET",
+        "pad": "/ece-dst/_count",
+        "body": {
+          "query": {
+            "term": {
+              "processed": true
+            }
+          }
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "count",
+          "operator": "eq",
+          "waarde": 3
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage ece-src",
+        "methode": "PUT",
+        "pad": "/ece-src/_bulk?refresh=true",
+        "body": "{\"index\":{}}\n{\"value\":1}\n{\"index\":{}}\n{\"value\":2}\n{\"index\":{}}\n{\"value\":3}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Ingest pipeline from requirements",
+    "domein": "Data Processing",
+    "opdracht": "Create an ingest pipeline `ece-enrich` that (1) sets `env` to \"prod\", (2) lowercases `user`, and (3) removes `secret`. Test it with _simulate.",
+    "hint": "Three processors: set, lowercase, remove. Give remove \"ignore_missing\": true.",
+    "modelantwoord": "PUT _ingest/pipeline/ece-enrich\n{\n  \"processors\": [\n    { \"set\":       { \"field\": \"env\", \"value\": \"prod\" } },\n    { \"lowercase\": { \"field\": \"user\" } },\n    { \"remove\":    { \"field\": \"secret\", \"ignore_missing\": true } }\n  ]\n}\n\nPOST _ingest/pipeline/ece-enrich/_simulate\n{\n  \"docs\": [ { \"_source\": { \"user\": \"ADMIN\", \"secret\": \"x\" } } ]\n}",
+    "checks": [
+      {
+        "naam": "Pipeline exists",
+        "methode": "GET",
+        "pad": "/_ingest/pipeline/ece-enrich",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Has a set processor",
+        "methode": "GET",
+        "pad": "/_ingest/pipeline/ece-enrich",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-enrich.processors",
+          "operator": "contains",
+          "waarde": "set"
+        }
+      },
+      {
+        "naam": "Has a remove processor",
+        "methode": "GET",
+        "pad": "/_ingest/pipeline/ece-enrich",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-enrich.processors",
+          "operator": "contains",
+          "waarde": "remove"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Runtime field via Painless in the mapping",
+    "domein": "Data Processing",
+    "opdracht": "Test data is staged in `ece-logs-rt` with a `message` field. Add a runtime field `message_length` (type long) to the mapping that emits the character length of `message`.",
+    "hint": "PUT /ece-logs-rt/_mapping with a runtime block. Use emit(doc['message.keyword'].value.length()).",
+    "modelantwoord": "PUT /ece-logs-rt/_mapping\n{\n  \"runtime\": {\n    \"message_length\": {\n      \"type\": \"long\",\n      \"script\": { \"source\": \"emit(doc['message.keyword'].value.length())\" }\n    }\n  }\n}",
+    "checks": [
+      {
+        "naam": "Runtime field is type long",
+        "methode": "GET",
+        "pad": "/ece-logs-rt/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-logs-rt.mappings.runtime.message_length.type",
+          "operator": "eq",
+          "waarde": "long"
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage ece-logs-rt",
+        "methode": "PUT",
+        "pad": "/ece-logs-rt/_bulk?refresh=true",
+        "body": "{\"index\":{}}\n{\"message\":\"hello world\"}\n{\"index\":{}}\n{\"message\":\"error\"}\n"
+      }
+    ]
+  },
+  {
+    "titel": "Diagnose and repair shard issues",
+    "domein": "Cluster Management",
+    "opdracht": "An index `ece-yellow` is staged with 1 replica, which stays yellow on a single node because the replica cannot be allocated. Repair cluster health by removing the replica so the index becomes green.",
+    "hint": "number_of_replicas can change dynamically: PUT /ece-yellow/_settings with number_of_replicas 0. Confirm via GET /_cluster/health/ece-yellow.",
+    "modelantwoord": "PUT /ece-yellow/_settings\n{\n  \"index\": { \"number_of_replicas\": 0 }\n}",
+    "checks": [
+      {
+        "naam": "0 replicas",
+        "methode": "GET",
+        "pad": "/ece-yellow/_settings",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-yellow.settings.index.number_of_replicas",
+          "operator": "eq",
+          "waarde": "0"
+        }
+      },
+      {
+        "naam": "Index is green",
+        "methode": "GET",
+        "pad": "/_cluster/health/ece-yellow",
+        "verwachting": {
+          "type": "json",
+          "pad": "status",
+          "operator": "eq",
+          "waarde": "green"
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Create yellow index",
+        "methode": "PUT",
+        "pad": "/ece-yellow",
+        "body": {
+          "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Register a repository and take a snapshot",
+    "domein": "Cluster Management",
+    "opdracht": "Register a filesystem snapshot repository `ece-repo` (choose a location your cluster allows under path.repo), then create snapshot `snap-1`. The check only verifies the repository is registered, so you may choose the location.",
+    "hint": "PUT _snapshot/ece-repo with type fs and a settings.location, then PUT _snapshot/ece-repo/snap-1?wait_for_completion=true. The location must be inside a path.repo entry in elasticsearch.yml.",
+    "modelantwoord": "PUT _snapshot/ece-repo\n{\n  \"type\": \"fs\",\n  \"settings\": { \"location\": \"ece_backups\" }\n}\n\nPUT _snapshot/ece-repo/snap-1?wait_for_completion=true",
+    "checks": [
+      {
+        "naam": "Repository registered",
+        "methode": "GET",
+        "pad": "/_snapshot/ece-repo",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-repo.type",
+          "operator": "eq",
+          "waarde": "fs"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Restore an index from a snapshot",
+    "domein": "Cluster Management",
+    "opdracht": "Restore exercise: assuming repository `ece-repo` and snapshot `snap-1` exist, write the request that restores only `ece-people` and renames it to `ece-people-restored`. (Register ece-repo first; the check verifies the repo.)",
+    "hint": "POST _snapshot/ece-repo/snap-1/_restore with indices, rename_pattern and rename_replacement.",
+    "modelantwoord": "POST _snapshot/ece-repo/snap-1/_restore\n{\n  \"indices\": \"ece-people\",\n  \"rename_pattern\": \"ece-people\",\n  \"rename_replacement\": \"ece-people-restored\"\n}",
+    "checks": [
+      {
+        "naam": "Repository ece-repo exists",
+        "methode": "GET",
+        "pad": "/_snapshot/ece-repo",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-repo.type",
+          "operator": "eq",
+          "waarde": "fs"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Configure a searchable snapshot",
+    "domein": "Cluster Management",
+    "opdracht": "Searchable snapshots are configured through ILM. Create an ILM policy `ece-frozen-policy` with a cold phase using the `searchable_snapshot` action pointing at repository `ece-repo`.",
+    "hint": "phases.cold.actions.searchable_snapshot.snapshot_repository = \"ece-repo\".",
+    "modelantwoord": "PUT _ilm/policy/ece-frozen-policy\n{\n  \"policy\": { \"phases\": {\n    \"cold\": {\n      \"min_age\": \"30d\",\n      \"actions\": { \"searchable_snapshot\": { \"snapshot_repository\": \"ece-repo\" } }\n    }\n  } }\n}",
+    "checks": [
+      {
+        "naam": "Policy exists",
+        "methode": "GET",
+        "pad": "/_ilm/policy/ece-frozen-policy",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Cold phase uses searchable_snapshot",
+        "methode": "GET",
+        "pad": "/_ilm/policy/ece-frozen-policy",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-frozen-policy.policy.phases.cold.actions.searchable_snapshot.snapshot_repository",
+          "operator": "eq",
+          "waarde": "ece-repo"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Configure cross-cluster search",
+    "domein": "Cluster Management",
+    "opdracht": "Configure this cluster for cross-cluster search by registering a remote cluster `ece-ccs` with seed `127.0.0.1:9300` (your own node, works single-node). Verify the remote is persisted.",
+    "hint": "PUT _cluster/settings, persistent.cluster.remote.ece-ccs.seeds = [\"127.0.0.1:9300\"].",
+    "modelantwoord": "PUT _cluster/settings\n{\n  \"persistent\": { \"cluster\": { \"remote\": {\n    \"ece-ccs\": { \"seeds\": [\"127.0.0.1:9300\"] }\n  } } }\n}",
+    "checks": [
+      {
+        "naam": "Remote ece-ccs configured",
+        "methode": "GET",
+        "pad": "/_cluster/settings",
+        "verwachting": {
+          "type": "json",
+          "pad": "persistent.cluster.remote.ece-ccs.seeds.0",
+          "operator": "contains",
+          "waarde": "9300"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Implement cross-cluster replication",
+    "domein": "Cluster Management",
+    "opdracht": "CCR exercise: with remote `ece-ccs` configured (see the CCS question), write the request that creates follower index `ece-follow` following leader `ece-leader` on `ece-ccs`. The check verifies the remote is configured.",
+    "hint": "PUT /ece-follow/_ccr/follow with remote_cluster and leader_index. CCR needs the remote registered first.",
+    "modelantwoord": "PUT /ece-follow/_ccr/follow?wait_for_active_shards=1\n{\n  \"remote_cluster\": \"ece-ccs\",\n  \"leader_index\": \"ece-leader\"\n}",
+    "checks": [
+      {
+        "naam": "Remote ece-ccs configured",
+        "methode": "GET",
+        "pad": "/_cluster/settings",
+        "verwachting": {
+          "type": "json",
+          "pad": "persistent.cluster.remote.ece-ccs.seeds.0",
+          "operator": "contains",
+          "waarde": "9300"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Automate snapshots with SLM",
+    "domein": "Cluster Management",
+    "opdracht": "Create a Snapshot Lifecycle Management policy `ece-slm` that snapshots all indices to repository `ece-repo` daily at 01:30, keeping minimum 5 and maximum 30 snapshots. Register ece-repo first if needed.",
+    "hint": "PUT _slm/policy/ece-slm with schedule (cron), name, repository, config.indices and retention (min_count/max_count).",
+    "modelantwoord": "PUT _slm/policy/ece-slm\n{\n  \"schedule\": \"0 30 1 * * ?\",\n  \"name\": \"<ece-snap-{now/d}>\",\n  \"repository\": \"ece-repo\",\n  \"config\": { \"indices\": [\"*\"] },\n  \"retention\": { \"min_count\": 5, \"max_count\": 30 }\n}",
+    "checks": [
+      {
+        "naam": "SLM policy exists",
+        "methode": "GET",
+        "pad": "/_slm/policy/ece-slm",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Uses repository ece-repo",
+        "methode": "GET",
+        "pad": "/_slm/policy/ece-slm",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-slm.policy.repository",
+          "operator": "eq",
+          "waarde": "ece-repo"
+        }
+      },
+      {
+        "naam": "Max 30 snapshots retained",
+        "methode": "GET",
+        "pad": "/_slm/policy/ece-slm",
+        "verwachting": {
+          "type": "json",
+          "pad": "ece-slm.policy.retention.max_count",
+          "operator": "eq",
+          "waarde": 30
+        }
+      }
+    ]
+  }
+]

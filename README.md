@@ -1,4 +1,4 @@
-# Elastic Examinator V2
+# Elastic Examinator
 
 Lokaal webportaal om te oefenen voor de Elastic Certified Engineer. Je voegt zelf
 opdrachten toe, voert ze uit in je eigen cluster, en de examinator kijkt via de
