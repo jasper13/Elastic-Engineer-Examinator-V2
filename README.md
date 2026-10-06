@@ -35,5 +35,7 @@ in je cluster zelf (indices `examinator-vragen` en `examinator-pogingen`).
 ## Tips
 
 - Cluster draait niet op je eigen machine? Pas `ES_URL` aan in `.env`.
+- Cluster draait niet op je eigen machine? Zorg ervoor dat je een SSH tunnel open hebt staan vanaf jouw eigen omgeving naar het cluster (commando's: ssh -fNT -L 9200:localhost:9200 USERNAME@IP_ADDRESS)
 - Zelf-ondertekend certificaat (https): laat `ES_VERIFY_TLS=false` staan.
 - Poort 8765 bezet? Wijzig de eerste poort in `docker-compose.yml`.
+  
