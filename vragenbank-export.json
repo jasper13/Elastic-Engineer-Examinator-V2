@@ -1,0 +1,430 @@
+[
+  {
+    "titel": "Q1: Custom analyzer for case-insensitive Carrier",
+    "domein": "Data Management",
+    "opdracht": "This set uses the `kibana_sample_data_flights` sample dataset (load it via Kibana > Home > Add sample data).\n\nDefine an index `flights_fixed` that includes a custom analyzer called `case-analyzer` for the `Carrier` field, allowing case-insensitive searches. It must use the `standard` tokenizer and a lowercase filter so all characters end up the same case. Reindex the sample data into it and confirm the mapping shows the custom analyzer on `Carrier`.\n\nTopics: Define an index that satisfies requirements; define and use a custom analyzer.",
+    "hint": "settings.analysis.analyzer.case-analyzer = { type: custom, tokenizer: standard, filter: [lowercase] }. Map Carrier as text with \"analyzer\": \"case-analyzer\". Then _reindex from the sample index.",
+    "modelantwoord": "PUT flights_fixed\n{\n  \"settings\": { \"analysis\": { \"analyzer\": { \"case-analyzer\": {\n    \"type\": \"custom\", \"tokenizer\": \"standard\", \"filter\": [\"lowercase\"] } } } },\n  \"mappings\": { \"properties\": { \"Carrier\": { \"type\": \"text\", \"analyzer\": \"case-analyzer\" } } }\n}\n\nPOST flights_fixed/_analyze\n{ \"analyzer\": \"case-analyzer\", \"text\": \"JetStar\" }\n\nPOST _reindex\n{ \"source\": { \"index\": \"kibana_sample_data_flights\" }, \"dest\": { \"index\": \"flights_fixed\" } }\n\nGET flights_fixed/_mapping",
+    "checks": [
+      {
+        "naam": "Index flights_fixed exists",
+        "methode": "HEAD",
+        "pad": "/flights_fixed",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "case-analyzer defined",
+        "methode": "GET",
+        "pad": "/flights_fixed/_settings",
+        "verwachting": {
+          "type": "json",
+          "pad": "flights_fixed.settings.index.analysis.analyzer.case-analyzer.tokenizer",
+          "operator": "eq",
+          "waarde": "standard"
+        }
+      },
+      {
+        "naam": "Carrier uses case-analyzer",
+        "methode": "GET",
+        "pad": "/flights_fixed/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "flights_fixed.mappings.properties.Carrier.analyzer",
+          "operator": "eq",
+          "waarde": "case-analyzer"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Q2: Dynamic template with Carrier exception",
+    "domein": "Data Management",
+    "opdracht": "Delete `flights_fixed` and create a new index `kibana_flights` with a dynamic template that maps all string fields as keyword, EXCEPT the `Carrier` field, which should be text with a lowercase (custom) analyzer. Reindex the sample data into `kibana_flights` and check the mappings.\n\nTopics: Define and use a dynamic template.\n\nNote: this exercise assumes `flights_fixed` exists from Q1 so it can be deleted first.",
+    "hint": "dynamic_templates with match_mapping_type \"string\", match \"*\", unmatch \"Carrier\" -> keyword. Explicitly map Carrier as text + case-analyzer. Then _reindex.",
+    "modelantwoord": "DELETE flights_fixed\n\nPUT kibana_flights\n{\n  \"settings\": { \"analysis\": { \"analyzer\": { \"case-analyzer\": {\n    \"type\": \"custom\", \"tokenizer\": \"standard\", \"filter\": [\"lowercase\"] } } } },\n  \"mappings\": {\n    \"dynamic_templates\": [\n      { \"strings_as_keyword\": {\n          \"match_mapping_type\": \"string\",\n          \"match\": \"*\",\n          \"unmatch\": \"Carrier\",\n          \"mapping\": { \"type\": \"keyword\" }\n      } }\n    ],\n    \"properties\": { \"Carrier\": { \"type\": \"text\", \"analyzer\": \"case-analyzer\" } }\n  }\n}\n\nPOST _reindex\n{ \"source\": { \"index\": \"kibana_sample_data_flights\" }, \"dest\": { \"index\": \"kibana_flights\" } }\n\nGET kibana_flights/_mapping",
+    "checks": [
+      {
+        "naam": "kibana_flights exists",
+        "methode": "HEAD",
+        "pad": "/kibana_flights",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "dynamic template present",
+        "methode": "GET",
+        "pad": "/kibana_flights/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "kibana_flights.mappings.dynamic_templates.0",
+          "operator": "exists"
+        }
+      },
+      {
+        "naam": "Carrier mapped as text",
+        "methode": "GET",
+        "pad": "/kibana_flights/_mapping",
+        "verwachting": {
+          "type": "json",
+          "pad": "kibana_flights.mappings.properties.Carrier.type",
+          "operator": "eq",
+          "waarde": "text"
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Ensure flights_fixed exists (so it can be deleted)",
+        "methode": "PUT",
+        "pad": "/flights_fixed",
+        "body": {}
+      }
+    ]
+  },
+  {
+    "titel": "Q3: ILM policy for time-series flights",
+    "domein": "Data Management",
+    "opdracht": "Define an ILM policy `flights_ILM` with these phases:\n- Hot: roll over after 5 minutes.\n- Warm: 3 minutes after rollover, forcemerge to 1 segment, shrink to 1 shard.\n- Cold: 6 minutes after rollover, set replicas to 0.\n- Delete: 8 minutes after rollover.\n\nTopics: Define an ILM policy for a time-series index.",
+    "hint": "hot.actions.rollover.max_age 5m. warm.min_age 8m with forcemerge + shrink. cold.min_age 11m with allocate replicas 0. delete.min_age 13m. (min_age counts from rollover.)",
+    "modelantwoord": "PUT _ilm/policy/flights_ILM\n{\n  \"policy\": { \"phases\": {\n    \"hot\":  { \"min_age\": \"0ms\", \"actions\": { \"rollover\": { \"max_age\": \"5m\" }, \"set_priority\": { \"priority\": 100 } } },\n    \"warm\": { \"min_age\": \"8m\", \"actions\": { \"forcemerge\": { \"max_num_segments\": 1 }, \"shrink\": { \"number_of_shards\": 1 }, \"set_priority\": { \"priority\": 50 } } },\n    \"cold\": { \"min_age\": \"11m\", \"actions\": { \"allocate\": { \"number_of_replicas\": 0 }, \"set_priority\": { \"priority\": 0 } } },\n    \"delete\": { \"min_age\": \"13m\", \"actions\": { \"delete\": {} } }\n  } }\n}",
+    "checks": [
+      {
+        "naam": "Policy exists",
+        "methode": "GET",
+        "pad": "/_ilm/policy/flights_ILM",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Hot rollover max_age 5m",
+        "methode": "GET",
+        "pad": "/_ilm/policy/flights_ILM",
+        "verwachting": {
+          "type": "json",
+          "pad": "flights_ILM.policy.phases.hot.actions.rollover.max_age",
+          "operator": "eq",
+          "waarde": "5m"
+        }
+      },
+      {
+        "naam": "Warm forcemerge 1 segment",
+        "methode": "GET",
+        "pad": "/_ilm/policy/flights_ILM",
+        "verwachting": {
+          "type": "json",
+          "pad": "flights_ILM.policy.phases.warm.actions.forcemerge.max_num_segments",
+          "operator": "eq",
+          "waarde": 1
+        }
+      },
+      {
+        "naam": "Delete phase present",
+        "methode": "GET",
+        "pad": "/_ilm/policy/flights_ILM",
+        "verwachting": {
+          "type": "json",
+          "pad": "flights_ILM.policy.phases.delete.actions.delete",
+          "operator": "exists"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Q4: Boolean query for delayed/cancelled US flights",
+    "domein": "Searching Data",
+    "opdracht": "Retrieve flights that were either delayed by >= 60 minutes OR canceled, where the destination country was `US`. Show only `DestCountry`, `Cancelled`, `FlightDelayMin`. Add a terms aggregation counting how many of those US flights had `Cancelled` true vs false.\n\nTopics: Boolean combination of queries and filters; bucket aggregation.\n\nRun this against the `kibana_sample_data_flights` index.",
+    "hint": "bool.should [ range FlightDelayMin gte 60, term Cancelled true ] + minimum_should_match 1, bool.filter [ term DestCountry US ]. _source the 3 fields. aggs terms on Cancelled.",
+    "modelantwoord": "GET kibana_sample_data_flights/_search\n{\n  \"_source\": [\"DestCountry\", \"Cancelled\", \"FlightDelayMin\"],\n  \"query\": { \"bool\": {\n    \"should\": [\n      { \"range\": { \"FlightDelayMin\": { \"gte\": 60 } } },\n      { \"term\": { \"Cancelled\": true } }\n    ],\n    \"minimum_should_match\": 1,\n    \"filter\": [ { \"term\": { \"DestCountry\": \"US\" } } ]\n  } },\n  \"aggs\": { \"sum_cancelled\": { \"terms\": { \"field\": \"Cancelled\" } } }\n}",
+    "checks": [
+      {
+        "naam": "Query returns US flights",
+        "methode": "POST",
+        "pad": "/kibana_sample_data_flights/_search",
+        "body": {
+          "_source": [
+            "DestCountry",
+            "Cancelled",
+            "FlightDelayMin"
+          ],
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "range": {
+                    "FlightDelayMin": {
+                      "gte": 60
+                    }
+                  }
+                },
+                {
+                  "term": {
+                    "Cancelled": true
+                  }
+                }
+              ],
+              "minimum_should_match": 1,
+              "filter": [
+                {
+                  "term": {
+                    "DestCountry": "US"
+                  }
+                }
+              ]
+            }
+          },
+          "aggs": {
+            "sum_cancelled": {
+              "terms": {
+                "field": "Cancelled"
+              }
+            }
+          }
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "hits.hits.0._source.DestCountry",
+          "operator": "eq",
+          "waarde": "US"
+        }
+      },
+      {
+        "naam": "Cancelled aggregation present",
+        "methode": "POST",
+        "pad": "/kibana_sample_data_flights/_search",
+        "body": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "range": {
+                    "FlightDelayMin": {
+                      "gte": 60
+                    }
+                  }
+                },
+                {
+                  "term": {
+                    "Cancelled": true
+                  }
+                }
+              ],
+              "minimum_should_match": 1,
+              "filter": [
+                {
+                  "term": {
+                    "DestCountry": "US"
+                  }
+                }
+              ]
+            }
+          },
+          "aggs": {
+            "sum_cancelled": {
+              "terms": {
+                "field": "Cancelled"
+              }
+            }
+          }
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "aggregations.sum_cancelled.buckets.0.key_as_string",
+          "operator": "exists"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Q5: Cross-cluster search with avg price",
+    "domein": "Searching Data",
+    "opdracht": "Implement a search that retrieves flights across TWO clusters, filtering for flights originating from \"Tokyo Haneda International Airport\" and calculating the average ticket price.\n\nTopics: Query across multiple clusters; metric aggregation.\n\nThis exercise needs a second cluster, so there is no automatic check - write and run it against your own multi-cluster setup. The model answer shows the remote registration and the CCS query.",
+    "hint": "Register the remote via PUT _cluster/settings (cluster.remote.<name>.seeds). Then query both indices: GET local,remote:index/_search with a term on Origin and an avg agg on AvgTicketPrice.",
+    "modelantwoord": "PUT _cluster/settings\n{\n  \"persistent\": { \"cluster\": { \"remote\": { \"cluster2_remote\": {\n    \"mode\": \"sniff\", \"seeds\": [\"node5:9304\"], \"skip_unavailable\": false\n  } } } }\n}\n\nGET kibana_sample_data_flights,cluster2_remote:kibana_sample_data_flights/_search\n{\n  \"query\": { \"term\": { \"Origin\": \"Tokyo Haneda International Airport\" } },\n  \"aggs\": { \"avg_ticket_price\": { \"avg\": { \"field\": \"AvgTicketPrice\" } } }\n}",
+    "checks": []
+  },
+  {
+    "titel": "Q6: Runtime field for flight time in hours",
+    "domein": "Searching Data",
+    "opdracht": "Write a search on `kibana_sample_data_flights` that uses a runtime field to calculate total flight time in HOURS (FlightTimeMin / 60) and filters for flights longer than 10 hours. Also expose the same value via a scripted field. Show `FlightNum` and the runtime field.\n\nTopics: Search that utilizes a runtime field.",
+    "hint": "runtime_mappings.total_flight_time (double) emit(doc['FlightTimeMin'].value / 60.0). Filter range gte 10. script_fields for the scripted version.",
+    "modelantwoord": "GET kibana_sample_data_flights/_search\n{\n  \"_source\": [\"FlightNum\"],\n  \"runtime_mappings\": {\n    \"total_flight_time\": { \"type\": \"double\",\n      \"script\": { \"source\": \"emit(doc['FlightTimeMin'].value / 60.0)\" } }\n  },\n  \"query\": { \"range\": { \"total_flight_time\": { \"gte\": 10.0 } } },\n  \"fields\": [\"total_flight_time\"],\n  \"script_fields\": { \"total_flight_time_scripted\": {\n    \"script\": { \"source\": \"doc['FlightTimeMin'].value / 60.0\" } } }\n}",
+    "checks": [
+      {
+        "naam": "Returns long-haul flights",
+        "methode": "POST",
+        "pad": "/kibana_sample_data_flights/_search",
+        "body": {
+          "runtime_mappings": {
+            "total_flight_time": {
+              "type": "double",
+              "script": {
+                "source": "emit(doc['FlightTimeMin'].value / 60.0)"
+              }
+            }
+          },
+          "query": {
+            "range": {
+              "total_flight_time": {
+                "gte": 10.0
+              }
+            }
+          },
+          "fields": [
+            "total_flight_time"
+          ],
+          "size": 1
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "hits.hits.0.fields.total_flight_time.0",
+          "operator": "gte",
+          "waarde": 10.0
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Q7: Highlight the FlightDelayType term",
+    "domein": "Developing Search Applications",
+    "opdracht": "Write a query that searches for flights with \"Weather Delay\" in the `FlightDelayType` field and highlights the matched term in the results.\n\nTopics: Highlight the search terms in the response of a query.",
+    "hint": "Use a match query on FlightDelayType, then a highlight block: { fields: { FlightDelayType: {} } }. (FlightDelayType is a keyword; use match or term.)",
+    "modelantwoord": "GET kibana_sample_data_flights/_search\n{\n  \"query\": { \"match\": { \"FlightDelayType\": \"Weather Delay\" } },\n  \"highlight\": { \"fields\": { \"FlightDelayType\": {} } }\n}",
+    "checks": [
+      {
+        "naam": "Returns highlighted hits",
+        "methode": "POST",
+        "pad": "/kibana_sample_data_flights/_search",
+        "body": {
+          "query": {
+            "match": {
+              "FlightDelayType": "Weather Delay"
+            }
+          },
+          "highlight": {
+            "fields": {
+              "FlightDelayType": {}
+            }
+          },
+          "size": 1
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "hits.hits.0.highlight",
+          "operator": "exists"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Q8: Ingest pipeline for FlightStatus",
+    "domein": "Data Processing",
+    "opdracht": "Define an ingest pipeline `flightstatus_pipeline` that adds a field `Flight Status` based on `FlightDelay` and `Cancelled` using Painless:\n- delayed -> \"Delayed\"\n- canceled -> \"Cancelled\"\n- otherwise -> \"On time\".\nThen remove the `FlightDelay` and `Cancelled` fields. Reindex the sample data into `flights_with_status` using this pipeline.\n\nTopics: Ingest pipeline with Painless to modify documents.",
+    "hint": "script processor building a String from ctx.FlightDelay / ctx.Cancelled, assign ctx['Flight Status']. Then a remove processor for the two fields. Reindex with dest.pipeline.",
+    "modelantwoord": "PUT _ingest/pipeline/flightstatus_pipeline\n{\n  \"processors\": [\n    { \"script\": { \"source\": \"if (ctx.FlightDelay == true) { ctx['Flight Status'] = 'Delayed'; } else if (ctx.Cancelled == true) { ctx['Flight Status'] = 'Cancelled'; } else { ctx['Flight Status'] = 'On time'; }\" } },\n    { \"remove\": { \"field\": [\"FlightDelay\", \"Cancelled\"] } }\n  ]\n}\n\nPUT flights_with_status\n\nPOST _reindex\n{\n  \"source\": { \"index\": \"kibana_sample_data_flights\" },\n  \"dest\": { \"index\": \"flights_with_status\", \"pipeline\": \"flightstatus_pipeline\" }\n}\n\nGET flights_with_status/_search?size=1",
+    "checks": [
+      {
+        "naam": "Pipeline exists",
+        "methode": "GET",
+        "pad": "/_ingest/pipeline/flightstatus_pipeline",
+        "verwachting": {
+          "type": "status"
+        }
+      },
+      {
+        "naam": "Has script processor",
+        "methode": "GET",
+        "pad": "/_ingest/pipeline/flightstatus_pipeline",
+        "verwachting": {
+          "type": "json",
+          "pad": "flightstatus_pipeline.processors",
+          "operator": "contains",
+          "waarde": "script"
+        }
+      },
+      {
+        "naam": "Has remove processor",
+        "methode": "GET",
+        "pad": "/_ingest/pipeline/flightstatus_pipeline",
+        "verwachting": {
+          "type": "json",
+          "pad": "flightstatus_pipeline.processors",
+          "operator": "contains",
+          "waarde": "remove"
+        }
+      },
+      {
+        "naam": "Pipeline works via _simulate",
+        "methode": "POST",
+        "pad": "/_ingest/pipeline/flightstatus_pipeline/_simulate",
+        "body": {
+          "docs": [
+            {
+              "_source": {
+                "FlightDelay": true,
+                "Cancelled": false
+              }
+            }
+          ]
+        },
+        "verwachting": {
+          "type": "json",
+          "pad": "docs.0.doc._source.Flight Status",
+          "operator": "eq",
+          "waarde": "Delayed"
+        }
+      }
+    ]
+  },
+  {
+    "titel": "Q9: Cross-cluster replication + snapshot",
+    "domein": "Cluster Management",
+    "opdracht": "Delete `kibana_sample_data_flights` locally and set up cross-cluster replication for it from your `cluster2_remote`, creating a follower index named `flights_replicated`. Also ensure the data is backed up via a snapshot repository.\n\nTopics: Cross-cluster replication; snapshot backup.\n\nThis exercise needs a second cluster and a registered snapshot repository, so there is no automatic check - use your own multi-cluster setup. The model answer shows the full flow.",
+    "hint": "Register a snapshot repo (Stack Management > Snapshot and Restore), take a snapshot, DELETE the local index, then PUT /flights_replicated/_ccr/follow with remote_cluster + leader_index.",
+    "modelantwoord": "PUT _snapshot/flights_repo/my-snap\n{ \"indices\": \"kibana_sample_data_flights\" }\n\nDELETE kibana_sample_data_flights\n\nPUT /flights_replicated/_ccr/follow\n{\n  \"remote_cluster\": \"cluster2_remote\",\n  \"leader_index\": \"kibana_sample_data_flights\",\n  \"max_read_request_operation_count\": 5120,\n  \"max_outstanding_read_requests\": 12,\n  \"max_read_request_size\": \"32mb\",\n  \"read_poll_timeout\": \"1m\"\n}\n\nGET flights_replicated/_search",
+    "checks": []
+  },
+  {
+    "titel": "Q10: Search template with pagination",
+    "domein": "Developing Search Applications",
+    "opdracht": "Create a search template `day_of_week_search` (mustache) that queries flights on a specific `dayOfWeek` and supports pagination via `from` and `size` params. Then run it with query_number = 2, the third page, 10 docs per page.\n\nTopics: Pagination; search templates.\n\nNote: third page at 10 per page means from = 20. Test data is staged in `flights_tpl_test` so the template call has an index to run against.",
+    "hint": "PUT _scripts/day_of_week_search with lang mustache: query match dayOfWeek {{query_number}}, from {{from}}, size {{size}}. Call via _search/template with params from=20, size=10.",
+    "modelantwoord": "PUT _scripts/day_of_week_search\n{\n  \"script\": {\n    \"lang\": \"mustache\",\n    \"source\": {\n      \"query\": { \"match\": { \"dayOfWeek\": \"{{query_number}}\" } },\n      \"from\": \"{{from}}\",\n      \"size\": \"{{size}}\"\n    }\n  }\n}\n\nGET kibana_sample_data_flights/_search/template\n{\n  \"id\": \"day_of_week_search\",\n  \"params\": { \"query_number\": 2, \"from\": 20, \"size\": 10 }\n}",
+    "checks": [
+      {
+        "naam": "Search template stored",
+        "methode": "GET",
+        "pad": "/_scripts/day_of_week_search",
+        "verwachting": {
+          "type": "json",
+          "pad": "found",
+          "operator": "eq",
+          "waarde": "True"
+        }
+      },
+      {
+        "naam": "Template uses mustache",
+        "methode": "GET",
+        "pad": "/_scripts/day_of_week_search",
+        "verwachting": {
+          "type": "json",
+          "pad": "script.lang",
+          "operator": "eq",
+          "waarde": "mustache"
+        }
+      }
+    ],
+    "setup": [
+      {
+        "naam": "Stage flights_tpl_test",
+        "methode": "PUT",
+        "pad": "/flights_tpl_test/_bulk?refresh=true",
+        "body": "{\"index\":{}}\n{\"dayOfWeek\":2,\"FlightNum\":\"A1\"}\n{\"index\":{}}\n{\"dayOfWeek\":2,\"FlightNum\":\"A2\"}\n{\"index\":{}}\n{\"dayOfWeek\":5,\"FlightNum\":\"B1\"}\n"
+      }
+    ]
+  }
+]
