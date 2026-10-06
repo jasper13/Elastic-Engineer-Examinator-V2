@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elastic Examinator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="kop">
+    <div class="merk">
+      <span class="merk-blok">iX</span>
+      <div>
+        <div class="merk-naam">Examinator</div>
+        <div class="merk-sub">oefenomgeving voor de Elastic Certified Engineer</div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab actief" data-view="examen">Examen</button>
+      <button class="tab" data-view="beheer">Vragen beheren</button>
+      <button class="tab" data-view="console">Console</button>
+    </nav>
+    <div id="cluster-pill" class="pill pill-onbekend" title="Clusterstatus">
+      <span class="dot"></span><span id="cluster-tekst">cluster…</span>
+    </div>
+  </header>
+
+  <!-- ===================== EXAMEN ===================== -->
+  <main id="view-examen" class="view">
+    <aside class="zijbalk">
+      <div class="zijbalk-kop">
+        <span class="label">Vragen</span>
+        <button id="btn-seed" class="knop knop-klein knop-stil" title="Vijf voorbeeldvragen toevoegen">vragenbank laden</button>
+      </div>
+      <div id="domein-filters" class="chips"></div>
+      <ul id="vragenlijst" class="vragenlijst"></ul>
+      <div id="lijst-leeg" class="leeg verborgen">
+        Nog geen vragen. Voeg er een toe via <strong>Vragen beheren</strong> of laad de voorbeelden.
+      </div>
+    </aside>
+
+    <section class="werkblad">
+      <div id="vraag-leeg" class="leeg">Kies links een vraag om te beginnen.</div>
+
+      <article id="vraagkaart" class="vraagkaart verborgen">
+        <div class="vraag-meta">
+          <span id="vraag-domein" class="badge"></span>
+          <span id="vraag-status" class="badge badge-stil"></span>
+        </div>
+        <h1 id="vraag-titel"></h1>
+        <p id="vraag-opdracht" class="opdracht"></p>
+
+        <label class="label" for="antwoord">Jouw antwoord / uitwerking</label>
+        <textarea id="antwoord" rows="9" spellcheck="false"
+          placeholder="PUT /mijn-index&#10;{&#10;  ...&#10;}&#10;&#10;Voer de opdracht uit in je cluster (bijv. via Kibana Dev Tools of de console-tab) en noteer hier je uitwerking."></textarea>
+
+        <div class="knoppenrij">
+          <button id="btn-controleer" class="knop knop-primair">Controleer in cluster</button>
+          <button id="btn-voorbereiden" class="knop verborgen">Testdata klaarzetten</button>
+          <button id="btn-hint" class="knop">Hint tonen</button>
+          <button id="btn-model" class="knop">Modelantwoord tonen</button>
+          <span class="sneltoets">⌘⏎ controleert</span>
+        </div>
+
+        <div id="setupvak" class="infovak verborgen"></div>
+
+        <div id="hintvak" class="infovak verborgen"></div>
+        <div id="modelvak" class="infovak infovak-code verborgen"></div>
+
+        <div id="feedback" class="feedback verborgen">
+          <div class="feedback-kop">
+            <span class="label">Verificatie tegen je cluster</span>
+            <span id="feedback-resultaat"></span>
+          </div>
+          <ul id="feedback-checks" class="checklijst"></ul>
+        </div>
+
+        <details id="pogingen-blok" class="pogingen verborgen">
+          <summary class="label">Eerdere pogingen</summary>
+          <ul id="pogingenlijst"></ul>
+        </details>
+      </article>
+    </section>
+  </main>
+
+  <!-- ===================== BEHEER ===================== -->
+  <main id="view-beheer" class="view verborgen">
+    <aside class="zijbalk">
+      <div class="zijbalk-kop">
+        <span class="label">Bestaande vragen</span>
+        <button id="btn-nieuw" class="knop knop-klein">+ nieuw</button>
+      </div>
+      <div class="import-export">
+        <button id="btn-export" class="knop knop-klein knop-stil">Exporteer JSON</button>
+        <button id="btn-import" class="knop knop-klein knop-stil">Importeer JSON</button>
+        <input id="import-file" type="file" accept="application/json,.json" class="verborgen">
+      </div>
+      <ul id="beheerlijst" class="vragenlijst"></ul>
+    </aside>
+
+    <section class="werkblad">
+      <form id="vraagform" class="formulier" autocomplete="off">
+        <h1 id="form-titel">Nieuwe vraag</h1>
+
+        <div class="veldrij">
+          <div class="veld groei">
+            <label class="label" for="f-titel">Titel</label>
+            <input id="f-titel" required placeholder="Bijv. Index met shard-instellingen">
+          </div>
+          <div class="veld">
+            <label class="label" for="f-domein">Domein</label>
+            <select id="f-domein"></select>
+          </div>
+        </div>
+
+        <div class="veld">
+          <label class="label" for="f-opdracht">Opdracht</label>
+          <textarea id="f-opdracht" rows="3" required placeholder="Wat moet er uitgevoerd worden in het cluster?"></textarea>
+        </div>
+
+        <div class="veldrij">
+          <div class="veld groei">
+            <label class="label" for="f-hint">Hint <span class="optioneel">— om je verder te helpen</span></label>
+            <textarea id="f-hint" rows="2"></textarea>
+          </div>
+        </div>
+
+        <div class="veld">
+          <label class="label" for="f-model">Modelantwoord</label>
+          <textarea id="f-model" class="mono" rows="5"></textarea>
+        </div>
+
+        <div class="veld">
+          <label class="label" for="f-setup">Setup-stappen <span class="optioneel">— JSON-array, optioneel; zet testdata klaar vóór de opdracht</span></label>
+          <textarea id="f-setup" class="mono" rows="3" spellcheck="false" placeholder='[{"naam": "Testdata", "methode": "PUT", "pad": "/mijn-index/_bulk?refresh=true", "body": "..."}]'></textarea>
+        </div>
+
+        <div class="veld">
+          <div class="zijbalk-kop">
+            <span class="label">Verificatiechecks <span class="optioneel">— zo kijkt de examinator mee in je cluster</span></span>
+            <button type="button" id="btn-check-toevoegen" class="knop knop-klein">+ check</button>
+          </div>
+          <div id="checks-container"></div>
+        </div>
+
+        <div class="knoppenrij">
+          <button type="submit" class="knop knop-primair">Vraag opslaan</button>
+          <button type="button" id="btn-verwijderen" class="knop knop-gevaar verborgen">Verwijderen</button>
+          <span id="form-melding" class="melding"></span>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <!-- ===================== CONSOLE ===================== -->
+  <main id="view-console" class="view verborgen">
+    <section class="werkblad werkblad-breed">
+      <h1>Cluster-console</h1>
+      <p class="opdracht">Kijk rechtstreeks mee in je Elastic-omgeving. Requests gaan via de backend naar je cluster.</p>
+      <div class="veldrij console-rij">
+        <select id="c-methode">
+          <option>GET</option><option>POST</option><option>PUT</option>
+          <option>DELETE</option><option>HEAD</option>
+        </select>
+        <input id="c-pad" class="mono groei" value="/_cat/indices?v" placeholder="/pad/naar/api">
+        <button id="btn-uitvoeren" class="knop knop-primair">Uitvoeren</button>
+      </div>
+      <div class="veld">
+        <label class="label" for="c-body">Request-body (JSON, optioneel)</label>
+        <textarea id="c-body" class="mono" rows="6" spellcheck="false"></textarea>
+      </div>
+      <div class="veld">
+        <div class="zijbalk-kop">
+          <span class="label">Respons</span>
+          <span id="c-status" class="badge badge-stil"></span>
+        </div>
+        <pre id="c-respons" class="respons">—</pre>
+      </div>
+      <div class="snelkoppelingen">
+        <span class="label">Snel:</span>
+        <button class="knop knop-klein knop-stil" data-snel="/_cat/indices?v">indices</button>
+        <button class="knop knop-klein knop-stil" data-snel="/_cluster/health">health</button>
+        <button class="knop knop-klein knop-stil" data-snel="/_cat/shards?v">shards</button>
+        <button class="knop knop-klein knop-stil" data-snel="/_ingest/pipeline">pipelines</button>
+        <button class="knop knop-klein knop-stil" data-snel="/_ilm/policy">ilm</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
